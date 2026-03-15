@@ -1,7 +1,10 @@
 import argparse
+import os
 
 from .generator import QRGenerator
+from .logos import LOGO_PRESETS, get_logo_svg
 from .mosaic import MosaicBlender, STYLES
+from .svg import QRSvgGenerator
 
 
 def main() -> None:
@@ -37,6 +40,21 @@ def main() -> None:
         help="Blending style",
     )
 
+    # --- svg ---
+    svg_parser = subparsers.add_parser("svg", help="Generate a vector SVG QR code")
+    svg_parser.add_argument("--data", required=True, help="Data to encode")
+    svg_parser.add_argument("--output", required=True, help="Output .svg path")
+    svg_parser.add_argument(
+        "--logo",
+        default=None,
+        help=f"Logo preset ({', '.join(LOGO_PRESETS)}) or path to an SVG file",
+    )
+    svg_parser.add_argument("--fg", default="#000000", help="Foreground color (default #000000)")
+    svg_parser.add_argument("--bg", default="#FFFFFF", help="Background color (default #FFFFFF)")
+    svg_parser.add_argument("--rounded", action="store_true", help="Rounded module corners")
+    svg_parser.add_argument("--module-size", type=int, default=10, help="Module size in px")
+    svg_parser.add_argument("--border", type=int, default=4, help="Quiet zone in modules")
+
     args = parser.parse_args()
 
     if args.command == "generate":
@@ -60,6 +78,31 @@ def main() -> None:
             qr_size=args.size,
         )
         print(f"Mosaic saved to {args.output}")
+
+    elif args.command == "svg":
+        gen = QRSvgGenerator()
+        svg_kwargs = dict(
+            module_size=args.module_size,
+            fg=args.fg,
+            bg=args.bg,
+            rounded=args.rounded,
+            border=args.border,
+        )
+        if args.logo is None:
+            gen.save_svg(args.data, args.output, **svg_kwargs)
+        else:
+            if args.logo in LOGO_PRESETS:
+                logo_svg = get_logo_svg(args.logo)
+            elif os.path.isfile(args.logo):
+                from pathlib import Path
+                logo_svg = Path(args.logo).read_text(encoding="utf-8")
+            else:
+                parser.error(
+                    f"--logo must be a preset name ({', '.join(LOGO_PRESETS)}) "
+                    f"or an existing SVG file path"
+                )
+            gen.save_svg_with_logo(args.data, logo_svg, args.output, **svg_kwargs)
+        print(f"SVG QR code saved to {args.output}")
 
 
 if __name__ == "__main__":
